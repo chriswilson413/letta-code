@@ -1,4 +1,5 @@
 import { parseArgs } from "node:util";
+import { REASONING_EFFORT_ORDER } from "@/agent/model";
 import { TOOLSET_OPTIONS } from "@/tools/toolset-catalog";
 
 export type CliFlagMode = "interactive" | "headless" | "both";
@@ -84,6 +85,17 @@ export const CLI_FLAG_CATALOG = {
       argLabel: "<id>",
       description:
         'Model ID or handle (e.g., "opus-4.5" or "anthropic/claude-opus-4-5")',
+    },
+  },
+  "reasoning-effort": {
+    parser: { type: "string" },
+    mode: "headless",
+    help: {
+      argLabel: "<level>",
+      description: `Reasoning effort: ${REASONING_EFFORT_ORDER.join(", ")}`,
+      continuationLines: [
+        'Overrides the effort implied by the model ID (e.g. "sonnet-5-low").',
+      ],
     },
   },
   embedding: { parser: { type: "string" }, mode: "both" },

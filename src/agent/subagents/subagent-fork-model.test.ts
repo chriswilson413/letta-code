@@ -42,6 +42,57 @@ describe("resolveForkModelOverride", () => {
     });
   });
 
+  test("an explicit effort overrides the catalog preset", async () => {
+    const result = await resolveForkModelOverride({
+      userModel: "gpt-5.6-sol",
+      parentModelHandle: "feather-openai/gpt-5.6-terra",
+      reasoningEffort: "low",
+      availableModels: availableModels(),
+    });
+
+    expect(result).toMatchObject({
+      modelHandle: "feather-openai/gpt-5.6-sol",
+      updateArgs: { reasoning_effort: "low", provider_type: "openai" },
+    });
+  });
+
+  test("an effort without a model changes only the effort", async () => {
+    const result = await resolveForkModelOverride({
+      parentModelHandle: "feather-openai/gpt-5.6-terra",
+      reasoningEffort: "max",
+      availableModels: availableModels(),
+    });
+
+    expect(result).toEqual({
+      modelHandle: "feather-openai/gpt-5.6-terra",
+      updateArgs: { provider_type: "openai", reasoning_effort: "max" },
+    });
+  });
+
+  test("an effort without a model fails when the parent model cannot be resolved", async () => {
+    expect(
+      resolveForkModelOverride({
+        parentModelHandle: null,
+        reasoningEffort: "max",
+        availableModels: availableModels(),
+      }),
+    ).rejects.toThrow(
+      "Fork reasoning effort is not available: the parent's model could not be resolved",
+    );
+  });
+
+  test("explicit inherit with an effort still changes only the effort", async () => {
+    const result = await resolveForkModelOverride({
+      userModel: "inherit",
+      parentModelHandle: "feather-openai/gpt-5.6-terra",
+      reasoningEffort: "low",
+      availableModels: availableModels(),
+    });
+
+    expect(result?.modelHandle).toBe("feather-openai/gpt-5.6-terra");
+    expect(result?.updateArgs?.reasoning_effort).toBe("low");
+  });
+
   test("honors a user-configured fork model when the tool omits one", async () => {
     const result = await resolveForkModelOverride({
       recommendedModel: "gpt-5.6-sol",

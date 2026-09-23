@@ -1,7 +1,11 @@
 import type { AgentState } from "@letta-ai/letta-client/resources/agents/agents";
 import { getModelContextWindow } from "@/agent/available-models";
 import { buildCreateAgentRequest } from "@/agent/create-agent-request";
-import { getModelUpdateArgs } from "@/agent/model";
+import {
+  getModelUpdateArgs,
+  type ModelReasoningEffort,
+  withReasoningEffortUpdateArg,
+} from "@/agent/model";
 import type { MemoryPromptMode } from "@/agent/prompt-assets";
 import { resolveAndBuildSystemPrompt } from "@/agent/system-prompt-resolution";
 import { getBackend } from "@/backend";
@@ -9,9 +13,12 @@ import {
   createEphemeralConversation as createEphemeralConversationRequest,
   type EphemeralConversationCreateBody,
 } from "@/backend/api/ephemeral-conversations";
+import { normalizeReasoningEffortForModel } from "@/utils/openai-reasoning-effort";
 
 export interface CreateEphemeralConversationOptions {
   model?: string;
+  /** Applied on top of the model's own settings, as at agent creation. */
+  reasoningEffort?: ModelReasoningEffort;
   systemPromptPreset?: string;
   systemPromptCustom?: string;
   memoryPromptMode?: MemoryPromptMode;
@@ -34,9 +41,18 @@ export async function buildEphemeralConversationCreateBody(
     isSubagent: true,
     baseTools: [],
   });
-  const modelSettings = options.model
-    ? getModelUpdateArgs(options.model)
-    : undefined;
+  // Agent updates repair efforts the model rejects (buildModelSettings); this
+  // body skips that path, so apply the same repair here.
+  const reasoningEffort =
+    options.reasoningEffort &&
+    (normalizeReasoningEffortForModel(
+      request.model,
+      options.reasoningEffort,
+    ) as ModelReasoningEffort);
+  const modelSettings = withReasoningEffortUpdateArg(
+    options.model ? getModelUpdateArgs(options.model) : undefined,
+    reasoningEffort,
+  );
   const contextWindow =
     (modelSettings?.context_window as number | undefined) ??
     (await getModelContextWindow(request.model));

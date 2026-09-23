@@ -8,6 +8,8 @@
 import { ACTING_USER_ID_ENV } from "@/agent/acting-user";
 import { getConversationId, getCurrentAgentId } from "@/agent/context";
 import { getScopedMemoryFilesystemRoot } from "@/agent/memory-filesystem";
+import type { ModelReasoningEffort } from "@/agent/model";
+import { parseReasoningEffort } from "@/agent/model";
 import {
   completeSubagent,
   generateSubagentId,
@@ -75,6 +77,8 @@ export interface SpawnBackgroundSubagentTaskArgs {
   prompt: string;
   description: string;
   model?: string;
+  /** Reasoning effort override applied on top of the model's own settings. */
+  reasoningEffort?: ModelReasoningEffort;
   /** Replace the subagent's configured system prompt/persona (advanced). */
   systemPromptOverride?: string;
   toolCallId?: string;
@@ -348,6 +352,7 @@ export function spawnBackgroundSubagentTask(
     prompt,
     description,
     model,
+    reasoningEffort,
     systemPromptOverride,
     toolCallId,
     existingAgentId,
@@ -467,6 +472,7 @@ export function spawnBackgroundSubagentTask(
       actingUserId,
       args.config,
       args.clientMessageId,
+      reasoningEffort,
     );
   };
   const memoryTask =
@@ -774,12 +780,13 @@ export async function launchSubagent(
     prepared &&
     (!args.conversation_id ||
       args.conversation_id === "default" ||
-      args.model !== undefined)
+      args.model !== undefined ||
+      args.reasoning_effort !== undefined)
   ) {
     return {
       success: false,
       error:
-        "custom requires a prepared conversation_id; configure its model before launching.",
+        "custom requires a prepared conversation_id; configure its model and reasoning effort before launching.",
     };
   }
   if (
@@ -809,6 +816,15 @@ export async function launchSubagent(
       };
     }
   }
+
+  const parsedReasoningEffort = parseReasoningEffort(args.reasoning_effort);
+  if (!parsedReasoningEffort.ok) {
+    return {
+      success: false,
+      error: `Invalid reasoning_effort "${args.reasoning_effort}". ${parsedReasoningEffort.message}`,
+    };
+  }
+  const reasoningEffort = parsedReasoningEffort.effort;
 
   let effectiveAgentId = args.agent_id;
   let effectiveConversationId = args.conversation_id;
@@ -851,6 +867,7 @@ export async function launchSubagent(
         parentConversationId: parentConvId,
         config,
         model,
+        reasoningEffort,
         signal,
       });
       effectiveAgentId = parentAgentId;
@@ -874,6 +891,7 @@ export async function launchSubagent(
     prompt,
     description,
     model,
+    reasoningEffort,
     toolCallId,
     existingAgentId: effectiveAgentId,
     existingConversationId: effectiveConversationId,

@@ -44,7 +44,7 @@ type ReasoningCapabilities = {
   mandatory?: boolean;
 };
 
-const REASONING_EFFORT_ORDER: ModelReasoningEffort[] = [
+export const REASONING_EFFORT_ORDER: ModelReasoningEffort[] = [
   "none",
   "minimal",
   "low",
@@ -78,11 +78,32 @@ export function getLocalModelLabel(modelHandle: string): string {
     : modelHandle;
 }
 
-function isModelReasoningEffort(value: unknown): value is ModelReasoningEffort {
+export function isModelReasoningEffort(
+  value: unknown,
+): value is ModelReasoningEffort {
   return (
     typeof value === "string" &&
     REASONING_EFFORT_ORDER.includes(value as ModelReasoningEffort)
   );
+}
+
+/**
+ * Narrow a caller-supplied reasoning effort. The single place that decides
+ * whether a value is a level and how the accepted levels are listed; callers
+ * keep their own way of surfacing a rejection (the CLI exits, the Agent tool
+ * returns a failed launch).
+ */
+export function parseReasoningEffort(
+  value: unknown,
+):
+  | { ok: true; effort: ModelReasoningEffort | undefined }
+  | { ok: false; message: string } {
+  if (value === undefined) return { ok: true, effort: undefined };
+  if (isModelReasoningEffort(value)) return { ok: true, effort: value };
+  return {
+    ok: false,
+    message: `Expected one of: ${REASONING_EFFORT_ORDER.join(", ")}`,
+  };
 }
 
 export function isLocalChatGptOAuthModelHandle(modelHandle: string): boolean {
@@ -496,9 +517,12 @@ type AgentModelSnapshot = {
  * Used during startup/resume refresh to re-apply only preset-defined fields
  * (without requiring an explicit --model flag).
  */
-export function getModelPresetUpdateForAgent(
-  agent: AgentModelSnapshot,
-): { modelHandle: string; updateArgs: Record<string, unknown> } | null {
+/**
+ * The model handle an agent is currently configured with, independent of
+ * whether that model carries any catalog preset. Null when the agent names no
+ * model at all.
+ */
+export function getAgentModelHandle(agent: AgentModelSnapshot): string | null {
   const directHandle =
     typeof agent.model === "string" && agent.model.length > 0
       ? agent.model
@@ -520,7 +544,13 @@ export function getModelPresetUpdateForAgent(
         ? llmModel
         : null;
 
-  const modelHandle = directHandle ?? llmDerivedHandle;
+  return directHandle ?? llmDerivedHandle;
+}
+
+export function getModelPresetUpdateForAgent(
+  agent: AgentModelSnapshot,
+): { modelHandle: string; updateArgs: Record<string, unknown> } | null {
+  const modelHandle = getAgentModelHandle(agent);
   if (!modelHandle) return null;
 
   const modelInfo = getModelInfoForLlmConfig(modelHandle, {
